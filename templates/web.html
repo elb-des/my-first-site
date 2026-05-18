@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Lora&display=swap" rel="stylesheet">
+
+    <title>Dipl</title>
+    <style>
+        body {
+            background-color: #e8e8e8;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #00204f;
+            text-align: center;
+            font-family: 'Lora', Helvetica;
+        }
+        
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .news-block {
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 20px; /* скругление углов */
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .news-title {
+            color: #00204f;
+            font-size: calc(1em + 8px);
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-family: 'Lora', Helvetica;
+        }
+        
+        .news-image {
+            width: 100%;
+            max-height: 300px;
+            object-fit: cover;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .news-summary {
+            font-family: 'Lora', Helvetica;
+            margin-bottom: 30px;
+            font-size: 20px;  
+        }
+        
+        .read-more-link {
+            display: block;
+            text-align: right;
+            margin-top: 8px;
+            font-family: 'Lora', Helvetica;
+        }
+        
+        .my-button {
+           background: white;   /* красный фон */
+           color: #00204f;              /* белый текст */
+           padding: 8px 16px;         /* внутренние отступы */
+           border: 2px solid #00204f;              /* рамка цвета #00204f */
+           border-radius: 10px;        /* скругление углов */
+           cursor: pointer;           /* курсор при наведении */
+           font-size: 14px;           /* размер текста */
+           transition: background 0.3s, transform 0.2s; /* анимация */
+            font-family: 'Lora', Helvetica;
+        }
+
+        .my-button:hover {
+            color: white;
+           background: #001e4a; /* чуть темнее при наведении */
+           transform: scale(1.05);    /* лёгкое увеличение */
+        }
+
+        .my-button:active {
+            color: white;
+           background-color: #00193e; /* темнее при клике */
+           transform: scale(0.98);    /* уменьшение при нажатии */
+        }
+        
+        .news-date {
+            color: gray;
+            margin-top: 10px;
+            font-family: 'Lora', Helvetica;
+        }
+        
+        .news-source {
+            color: #555;
+            margin-top: 5px;
+            font-family: 'Lora', Helvetica;
+            font-size: 0.9em;
+        }
+        
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Новости</h1>
+
+    {% if clusters %}
+        <ul id="news-list">
+            {% for row in clusters[:5] %}
+                <li class="news-block">
+                    {% if row.img %}
+                    <img src="{{ row.img }}" alt="{{ row.title }}" class="news-image">
+                    {% endif %}
+                    <div class="news-title">{{ row.title }}</div>
+                    <div class="news-summary">{{ row.summary_final }}</div>
+                    {% if row.link %}
+                    <div class="read-more-link"><a href="{{ row.link }}" class="my-button">Подробнее</a></div><br>
+                    {% endif %}
+                    <div class="news-date" data-date="{{row.date}}" data-source="{{row.source}}"></div>
+                    <div class="news-date">Источник: {{ row.source }}</div>
+
+
+                </li>
+            {% endfor %}
+        </ul>
+        {% if clusters|length > 5 %}
+            <button id="load-more-btn" class="my-button" onclick="loadMoreNews()">Показать еще</button>
+        {% endif %}
+    {% else %}
+        <p>No data found 😭</p>
+    {% endif %}
+
+<script>
+    let currentOffset = 5;
+    const batchSize = 5;
+    const totalNews = parseInt('{{ clusters|length }}');
+
+    function loadMoreNews() {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', `clusters?offset=${currentOffset}&limit=${batchSize}`, true);
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                const newsList = document.getElementById('news-list');
+                
+                response.clusters.forEach(function(row) {
+                    const li = document.createElement('li');
+                    li.className = 'news-block';
+                    li.innerHTML = `
+                        ${(row.img ? `<img src="${row.img}" alt="${row.title}" class="news-image">` : '')}
+                        <div class="news-title">${row.title}</div>
+                        <div class="news-summary">${row.summary_final}</div>
+                        ${row.link ? `<div class="read-more-link"><a href="${row.link}" class="my-button">Подробнее</a></div><br>` : ''}
+                        <div class="news-date">${formatDate(row.date)}</div>
+                        <div class="news-date">Источник: ${row.source}</div>
+                    `;
+                    newsList.appendChild(li);
+                });
+                
+                currentOffset += batchSize;
+                
+                if (currentOffset >= totalNews) {
+                    document.getElementById('load-more-btn').style.display = 'none';
+                }
+            }
+        };
+        xhr.send();
+    }
+</script>
+<script>
+    function formatDate(dateString) {
+        // Преобразование строки даты в нужный формат
+        const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+        
+        const date = new Date(dateString);
+        const day = date.getDate();
+        const month = months[date.getMonth()];
+        const year = date.getFullYear();
+        
+        return `${day} ${month} ${year}`;
+    }
+
+    // Форматируем даты для первых 5 новостей после загрузки страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        const dateElements = document.querySelectorAll('.news-date[data-date]');
+        dateElements.forEach(function(element) {
+            const originalDate = element.getAttribute('data-date');
+            element.textContent = formatDate(originalDate);
+        });
+    });
+</script>
+
+
+</div> <!-- Закрывающий тег для container -->
+</body>
+</html>
