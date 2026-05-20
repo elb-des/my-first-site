@@ -1,65 +1,48 @@
 from flask import Flask, render_template, request
-import sqlite3
+import psycopg2
 import os
-from datetime import datetime
-import email.utils
 
 app = Flask(__name__)
 
-DB_PATH = r"C:\diploma\kino\news.db"   # твоя база
+DATABASE_URL = os.environ["DATABASE_URL"]
+
+def get_connection():
+    return psycopg2.connect(DATABASE_URL)
+
 
 def get_clusters(offset=0, limit=None):
     print("=== DEBUG START ===")
 
-    # 1. проверяем путь
-    print("Using DB:", DB_PATH)
-    print("Exists:", os.path.exists(DB_PATH))
-
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_connection()
     cur = conn.cursor()
 
-    # 2. выводим список таблиц
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = cur.fetchall()
-    print("Tables:", [t[0] for t in tables])
-
-    # 3. пробуем считать данные
     try:
-        # Получаем все данные без сортировки на уровне SQL
-        if limit:
-            cur.execute("SELECT id_news, title, summary_final, date, link, img, content, source FROM news")
-            rows = cur.fetchall()
-        else:
-            cur.execute("SELECT id_news, title, summary_final, date, link, img, content, source FROM news")
-            rows = cur.fetchall()
+        cur.execute("""
+            SELECT id_news, title, summary_final, date, link, img, content, source
+            FROM news
+            ORDER BY date DESC
+        """)
+        rows = cur.fetchall()
+
     except Exception as e:
-        print("ERROR selecting from news:", e)
+        print("ERROR:", e)
         rows = []
 
     conn.close()
 
-    # Сортируем результаты по дате в Python
-    def parse_rss_date(date_str):
-        try:
-            # Преобразуем RSS дату в объект datetime
-            return datetime(*email.utils.parsedate(date_str)[:6])
-        except:
-            # Если не получается распарсить, возвращаем минимальную дату
-            return datetime.min
+    columns = ["id_news", "title", "summary_final", "date", "link", "img", "content", "source"]
 
-    # Сортируем по дате в порядке убывания (новые первыми)
-    rows = sorted(rows, key=lambda x: parse_rss_date(x['date']), reverse=True)
-    
-    # Применяем лимит и смещение после сортировки
+    rows = [dict(zip(columns, r)) for r in rows]
+
+    # pagination
     if limit:
-        rows = rows[offset:offset+limit]
+        rows = rows[offset:offset + limit]
     else:
         rows = rows[offset:]
 
-    print("Rows in news after sorting:", len(rows))
+    print("Rows:", len(rows))
     print("=== DEBUG END ===")
-    
+
     return rows
 
 
@@ -73,22 +56,28 @@ def index():
 def clusters_api():
     offset = int(request.args.get('offset', 0))
     limit = int(request.args.get('limit', 5))
+
     clusters = get_clusters(offset, limit)
-    # Преобразуем объекты Row в словари для JSON сериализации
+
     clusters_list = []
+
     for cluster in clusters:
-        # Используем summary, если он есть, иначе используем content в качестве резервного варианта
-        summary_final = cluster['summary_final'] if cluster['summary_final'] else cluster['content'][:200] + "..." if cluster['content'] else ""
-        cluster_dict = {
+        summary_final = cluster['summary_final']
+
+        if not summary_final and cluster['content']:
+            summary_final = cluster['content'][:200] + "..."
+        elif not summary_final:
+            summary_final = ""
+
+        clusters_list.append({
             'title': cluster['title'],
             'summary_final': summary_final,
             'date': cluster['date'],
             'link': cluster['link'],
             'img': cluster['img'],
-            'link': cluster['link'],
             'source': cluster['source']
-        }
-        clusters_list.append(cluster_dict)
+        })
+
     return {'clusters': clusters_list}
 
 
