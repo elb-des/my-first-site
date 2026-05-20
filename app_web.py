@@ -11,7 +11,7 @@ def get_connection():
 
 
 def get_clusters(offset=0, limit=None):
-    print("=== DEBUG START ===")
+    print("= DEBUG START =")
 
     conn = get_connection()
     cur = conn.cursor()
